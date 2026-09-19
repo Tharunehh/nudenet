@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NudeNet - NSFW Detection</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    header { text-align: center; padding: 30px 0; border-bottom: 1px solid #333; margin-bottom: 30px; }
+    header h1 { font-size: 2.5rem; color: #e94560; }
+    header p { color: #888; margin-top: 10px; }
+    .upload-area { border: 2px dashed #e94560; border-radius: 12px; padding: 60px; text-align: center; margin: 30px 0; background: #16213e; cursor: pointer; transition: all 0.3s; }
+    .upload-area:hover { background: #1a1a2e; border-color: #ff6b6b; }
+    .upload-area.dragover { background: #1a1a2e; border-color: #4ecca3; }
+    .upload-area input { display: none; }
+    .upload-area .icon { font-size: 3rem; margin-bottom: 15px; }
+    .upload-area p { color: #888; }
+    .upload-area .btn { display: inline-block; padding: 10px 30px; background: #e94560; color: white; border-radius: 6px; cursor: pointer; margin-top: 15px; font-size: 1rem; }
+    .upload-area .btn:hover { background: #c73652; }
+    .preview { display: none; margin: 20px 0; }
+    .preview img { max-width: 100%; border-radius: 8px; }
+    .results { display: none; margin-top: 30px; }
+    .results .badge { display: inline-block; padding: 8px 20px; border-radius: 20px; margin: 5px; font-weight: bold; }
+    .badge.nude { background: #e94560; }
+    .badge.sexy { background: #f39c12; }
+    .badge.person { background: #3498db; }
+    .badge.safe { background: #27ae60; }
+    .parts-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .parts-table th { background: #e94560; padding: 12px; text-align: left; }
+    .parts-table td { padding: 10px 12px; border-bottom: 1px solid #333; }
+    .progress { width: 100%; background: #333; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+    .progress-bar { height: 6px; background: #e94560; transition: width 0.3s; }
+    .loading { display: none; text-align: center; padding: 40px; }
+    .loading .spinner { border: 3px solid #333; border-top: 3px solid #e94560; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .api-info { background: #16213e; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    .api-info code { background: #1a1a2e; padding: 2px 6px; border-radius: 3px; color: #4ecca3; }
+    .status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+    .status.online { background: #27ae60; }
+    .status.offline { background: #e94560; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #16213e; border-radius: 8px; padding: 20px; }
+    .card h3 { color: #e94560; margin-bottom: 15px; }
+    footer { text-align: center; padding: 20px; color: #555; border-top: 1px solid #333; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔞 NudeNet</h1>
+      <p>NSFW Object Detection powered by TensorFlow.js</p>
+      <span id="status" class="status offline">Checking...</span>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>📤 Upload Image</h3>
+        <div class="upload-area" id="dropArea">
+          <div class="icon">📁</div>
+          <p>Drag & drop an image here</p>
+          <p style="font-size: 0.9rem; margin-top: 10px;">or</p>
+          <label class="btn" for="fileInput">Choose File</label>
+          <input type="file" id="fileInput" accept="image/*">
+        </div>
+        <div class="preview" id="preview">
+          <img id="previewImg" alt="Preview">
+        </div>
+        <div class="loading" id="loading">
+          <div class="spinner"></div>
+          <p style="margin-top: 15px;">Analyzing...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📊 Detection Results</h3>
+        <div id="results" class="results">
+          <div id="badges"></div>
+          <table class="parts-table">
+            <thead>
+              <tr><th>Body Part</th><th>Confidence</th><th>Box</th></tr>
+            </thead>
+            <tbody id="partsBody"></tbody>
+          </table>
+        </div>
+        <div class="api-info">
+          <h3>API Endpoints</h3>
+          <p><code>POST /api/detect</code> - Detect NSFW in image</p>
+          <p><code>POST /api/detect/batch</code> - Batch detection</p>
+          <p><code>GET /api/health</code> - Health check</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>NudeNet v0.4.0 | NSFW Object Detection for TFJS and NodeJS</p>
+    </footer>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    const fileInput = document.getElementById('fileInput');
+    const dropArea = document.getElementById('dropArea');
+    const preview = document.getElementById('preview');
+    const previewImg = document.getElementById('previewImg');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    const badges = document.getElementById('badges');
+    const partsBody = document.getElementById('partsBody');
+    const statusEl = document.getElementById('status');
+
+    // Check API health
+    fetch(`${API_URL}/api/health`)
+      .then(r => r.json())
+      .then(data => {
+        statusEl.textContent = '● Online';
+        statusEl.className = 'status online';
+      })
+      .catch(() => {
+        statusEl.textContent = '○ Offline';
+        statusEl.className = 'status offline';
+      });
+
+    // Drag & drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+      dropArea.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); });
+    });
+    ['dragenter', 'dragover'].forEach(e => {
+      dropArea.addEventListener(e, () => dropArea.classList.add('dragover'));
+    });
+    ['dragleave', 'drop'].forEach(e => {
+      dropArea.addEventListener(e, () => dropArea.classList.remove('dragover'));
+    });
+    dropArea.addEventListener('drop', e => {
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) handleFile(file);
+    });
+    fileInput.addEventListener('change', e => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        previewImg.src = e.target.result;
+        preview.style.display = 'block';
+        results.style.display = 'none';
+        loading.style.display = 'block';
+        detectImage(file);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function detectImage(file) {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        const res = await fetch(`${API_URL}/api/detect`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        showResults(data);
+      } catch (err) {
+        console.error('Detection error:', err);
+        loading.style.display = 'none';
+      }
+    }
+
+    function showResults(data) {
+      loading.style.display = 'none';
+      results.style.display = 'block';
+
+      if (!data.success || !data.result) {
+        badges.innerHTML = '<span class="badge safe">Error: ' + (data.error || 'Unknown') + '</span>';
+        return;
+      }
+
+      const r = data.result;
+      badges.innerHTML = '';
+
+      if (r.person) badges.innerHTML += '<span class="badge person">Person Detected</span>';
+      if (r.nude) badges.innerHTML += '<span class="badge nude">⚠ Nude</span>';
+      else if (r.sexy) badges.innerHTML += '<span class="badge sexy">Sexy</span>';
+      else badges.innerHTML += '<span class="badge safe">Safe</span>';
+
+      partsBody.innerHTML = '';
+      r.parts.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.class}</td><td>${Math.round(100 * p.score)}%</td><td>[${p.box.map(v => Math.round(v)).join(', ')}]</td>`;
+        partsBody.appendChild(tr);
+      });
+    }
+  </script>
+</body>
+</html>
