@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "npm run build",
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Run Server",
+      "type": "shell",
+      "command": "node dist/api/server.js",
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Server (dev)",
+      "type": "shell",
+      "command": "npm run api",
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "npm test",
+      "group": "test",
+      "problemMatcher": ["$jest"]
+    }
+  ]
+}

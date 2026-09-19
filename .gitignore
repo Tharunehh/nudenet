@@ -9,9 +9,11 @@ dist/
 .env.*
 *.env
 
-# editor
-.vscode/
-.idea/
+# editor (keep .vscode/settings.json for team sharing)
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # lock files
 pnpm-lock.yaml
